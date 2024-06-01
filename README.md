@@ -15,7 +15,7 @@ The model is having seperate `Residual` connection block, for this with increasi
 
 ✏️ For Learning Purpose we are initializing the model with random weights.
 
-✏️ I am using one scheduler to devide the learning rate by `10` when the test loss come to a stable position.
+✏️ I am using one scheduler to devide the learning rate by `10` when the test loss comes to a stable position.
  
 
 ## 🗃️ Dataset
