@@ -17,7 +17,7 @@ if __name__=='__main__':
 
 	EPOCH=100
 	BATCH_SIZE=256
-	LR=12-2
+	LR=1e-2
 	MOMENTUM=0.9
 	L2_REG = 5e-3
 	dataset_path = "./imagenet"
@@ -33,7 +33,7 @@ if __name__=='__main__':
 	curr_epoch=-1
 	calc=5
 
-	train_dataset = ImageNetDataset(dataset_path,dataset_type='train')
+	training_dataset = ImageNetDataset(dataset_path,dataset_type='train')
 	train_loader = torch.utils.data.DataLoader(train_dataset,batch_size=BATCH_SIZE,shuffle=True)
 
 	test_dataset = ImageNetDataset(dataset_path,dataset_type='test')
@@ -66,16 +66,16 @@ if __name__=='__main__':
 				inputs = inputs.to(device)
 				labels = labels.to(device)
 
-				output = resnet(inputs)
+				outputs = resnet(inputs)
 
-				loss = loss_fn(output,labels)
+				loss = loss_fn(outputs,labels)
 				current_loss.append(loss.item())
 				optimizer.zero_Grad()
 				loss.backward()
 				optimizer.step()
 
 				with torch.no_grad():
-					accuracy = accuracy_calculate(labels,output)/BATCH_SIZE
+					accuracy = accuracy_calculate(labels,outputs)/BATCH_SIZE
 					current_accuracy.append(accuracy)
 
 					if i%calc==0 and i>=calc:
