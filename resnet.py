@@ -43,29 +43,29 @@ class Resnet(nn.Module):
 	def __init__(self,input_channel,architecture,num_classes=1000):
 		super().__init__()
 
-		self.input_channel = input_channel
+		self.input_channels = input_channel
 		self.architecture = architecture
 
 		self.inp_layer = nn.Sequential(
-			nn.Conv2d(self.input_channel,64,stride=2,padding=3,kernel_size=7),
+			nn.Conv2d(self.input_channels,64,stride=2,padding=3,kernel_size=7),
 			nn.BatchNorm2d(64),
 			nn.ReLU(),
 			nn.MaxPool2d(kernel_size=3,stride=2,padding=1),
 			)
 
-		self.resnet_block = nn.ModuleList()
+		self.resnet_blocks = nn.ModuleList()
 
 		input_channel=64
 		for (channel,times) in self.architecture:
 			for _ in range(times):
-				self.resnet_block.append(BasicBlock(input_channel,channel))
+				self.resnet_blocks.append(BasicBlock(input_channel,channel))
 				input_channel=channel
 		self.flatten = nn.Flatten()
 		self.fc = nn.Linear(7*7*512,num_classes)
 
 	def forward(self,x):
 		x = self.inp_layer(x)
-		for residual in self.resnet_block:
+		for residual in self.resnet_blocks:
 			x = residual(x)
 		x = self.fc(self.flatten(x))
 		return x
