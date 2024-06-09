@@ -8,68 +8,107 @@ print("Current Device ",device)
 
 arc_38 = [[64,3],[128,4],[256,6],[512,3]]
 
-class BasicBlock(nn.Module):
-	def __init__(self,input_channel,output_channel):
-		super().__init__()
-		self.conv_block = nn.Sequential()
-		if input_channel==output_channel:
-			self.conv_block.append(nn.Conv2d(input_channel,output_channel,kernel_size=3,stride=1,padding='same'))
-		else:
-			self.conv_block.append(nn.Conv2d(input_channel,output_channel,kernel_size=3,stride=2,padding=1))
+class IdentityBlock(nn.Module):
+    def __init__(self,f,in_filter,filters):
+        super().__init__()
+        Fin = in_filter
+        F1,F2,F3 = filters
+        self.conv1 = nn.Conv2d(Fin,F1,kernel_size=1,stride=(1,1),padding='valid')
+        self.bn1   = nn.BatchNorm2d(F1, eps=1e-05)
 
-		self.conv_block.append(nn.BatchNorm2d(output_channel))
-		self.conv_block.append(nn.ReLU())
+        self.conv2 = nn.Conv2d(F1,F2,kernel_size=f,stride=(1,1),padding='same')
+        self.bn2   = nn.BatchNorm2d(F2, eps=1e-05)
 
-		self.conv_block.append(nn.Conv2d(output_channel,output_channel,kernel_size=3,stride=1,padding='same'))
-		self.conv_block.append(nn.BatchNorm2d(output_channel))
+        self.conv3 = nn.Conv2d(F2, F3,kernel_size=1,stride=(1,1),padding='valid')
+        self.bn3   = nn.BatchNorm2d(F3, eps=1e-05)
+        
+        self.relu  = nn.ReLU()
+    def forward(self,X):
+        X_shortcut = X
 
-		self.skip_block = None
-		if input_channel!=output_channel:
-			self.skip_block = nn.Conv2d(input_channel,output_channel,kernel_size=1,stride=2,padding='valid')
+        X = self.relu(self.bn1(self.conv1(X)))
+        X = self.relu(self.bn2(self.conv2(X)))
+        X = self.bn3(self.conv3(X))
 
-		self.relu = nn.ReLU()
-		self.batch_norm = nn.BatchNorm2d(output_channel)
+        X = X + X_shortcut
+        X = self.relu(X)
 
-	def forward(self,x):
-		skip = x
-		x = self.conv_block(x)
-		if self.skip_block !=None:
-			skip = self.skip_block(skip)
-		x = x + skip
+        return X
+        
 
-		return self.relu(self.batch_norm(x))
+class ConvolutionalBlock(nn.Module):
+    def __init__(self,f,in_filter,out_filters,s=2):
+        super().__init__()
+        Fin = in_filter
+        F1,F2,F3 = out_filters
+        self.conv1 = nn.Conv2d(Fin,F1,kernel_size=1,stride=(s,s),padding='valid')
+        self.bn1   = nn.BatchNorm2d(F1)
 
-class Resnet(nn.Module):
-	def __init__(self,input_channel,architecture,num_classes=1000):
-		super().__init__()
+        self.conv2 = nn.Conv2d(F1,F2,kernel_size=1,stride=(1,1),padding='same')
+        self.bn2   = nn.BatchNorm2d(F2)
 
-		self.input_channels = input_channel
-		self.architecture = architecture
+        self.conv3 = nn.Conv2d(F2,F3,kernel_size=1,stride=(1,1),padding='valid')
+        self.bn3   = nn.BatchNorm2d(F3)
 
-		self.inp_layer = nn.Sequential(
-			nn.Conv2d(self.input_channels,64,stride=2,padding=3,kernel_size=7),
-			nn.BatchNorm2d(64),
-			nn.ReLU(),
-			nn.MaxPool2d(kernel_size=3,stride=2,padding=1),
-			)
+        self.conv_sh = nn.Conv2d(Fin,F3,kernel_size=1,stride=(s,s),padding='valid')
+        self.bn_sh   = nn.BatchNorm2d(F3)
+        self.relu = nn.ReLU()
 
-		self.resnet_blocks = nn.ModuleList()
+    def forward(self,X):
+        X_shortcut = X
+        X = self.relu(self.bn1(self.conv1(X)))
+        X = self.relu(self.bn2(self.conv2(X)))
+        X = self.bn3(self.conv3(X))
 
-		input_channel=64
-		for (channel,times) in self.architecture:
-			for _ in range(times):
-				self.resnet_blocks.append(BasicBlock(input_channel,channel))
-				input_channel=channel
-		self.flatten = nn.Flatten()
-		self.fc = nn.Linear(7*7*512,num_classes)
+        X_shortcut = self.bn_sh(self.conv_sh(X_shortcut))
 
-	def forward(self,x):
-		x = self.inp_layer(x)
-		for residual in self.resnet_blocks:
-			x = residual(x)
-		x = self.fc(self.flatten(x))
-		return x
+        X = self.relu(X + X_shortcut)
+        return X
+
+
+class ResNet(nn.Module):
+    def __init__(self,input_channel=3,classes=1000,reps=[3,4,6,3],training=True):
+        super().__init__()
+        self.channe=input_channel
+        self.classe = classes
+
+        self.conv1 = nn.Conv2d(3,64,kernel_size=7,stride=2,padding=3)
+        self.bn = nn.BatchNorm2d(64)
+        self.relu= nn.ReLU()
+        self.pool = nn.MaxPool2d(kernel_size=3,stride=2,padding=1)
+        self.intermediate = nn.ModuleList()
+        
+        self.sequential = nn.Sequential()
+
+        self.sequential.append(ConvolutionalBlock(3,64,out_filters = [64,64,256],s=1))
+        for i in range(1,reps[0]):
+            self.sequential.append(IdentityBlock(3,256,[64,64,256]))
+
+        self.sequential.append(ConvolutionalBlock(3,256,out_filters = [128, 128, 512],s=2))
+        for i in range(1,reps[1]):
+            self.sequential.append(IdentityBlock(3,512,[128, 128, 512]))
+
+        self.sequential.append(ConvolutionalBlock(3,512,out_filters = [256, 256, 1024],s=2))
+        for i in range(1,reps[2]):
+            self.sequential.append(IdentityBlock(3,1024,[256, 256, 1024]))
+
+        self.sequential.append(ConvolutionalBlock(3,1024,out_filters = [512, 512, 2048],s=2))
+        for i in range(1,reps[3]):
+            self.sequential.append(IdentityBlock(3,2048,[512, 512, 2048]))
+        
+        self.flatten = nn.Flatten()
+        self.fc = nn.Linear(7*7*2048,classes)
+    def forward(self,X):
+        X =  self.pool(self.relu(self.bn(self.conv1(X))))
+        X = self.sequential(X)
+        X = self.flatten(X)
+        X = self.fc(X)
+        return X
+
+
+
+res_50_repeats = [3,4,6,3]
 
 if __name__=='__main__':
-	resnet = Resnet(3,arc_38).to(device)
-	print(torchsummary.summary(resnet,(3,224,224)))
+	test = ResNet().to(device)
+	print(torchsummary.summary(test,(3,224,224)))

@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 
-from resnet import arc_38, Resnet
+from resnet import res_50_repeats, ResNet
 from dataset import ImageNetDataset
 from utils import accuracy_calculate 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -39,7 +39,7 @@ if __name__=='__main__':
 	test_dataset = ImageNetDataset(dataset_path,dataset_type='test')
 	test_loader = torch.utils.data.DataLoader(test_dataset,batch_size=1,shuffle=False)
 
-	resnet = Resnet(3,arc_38,num_classes).to(device)
+	resnet = ResNet(3,num_classes,res_50_repeats).to(device)
 	loss_fn = nn.CrossEntropyLoss()
 	optimizer = torch.optim.SGD(resnet.parameters(),lr=LR,momentum=MOMENTUM,weight_decay=L2_REG)
 	scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,'min',0.1,2)
